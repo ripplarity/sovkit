@@ -10,3 +10,7 @@ Attested migration kit: Microsoft 365 estate to openDesk/Nextcloud. Signed inven
     python -m sovkit verify work/demo
 
 See `docs/FOR_SIS.md`. Apache-2.0.
+
+## Attestations (attest-spec v1)
+
+`inventory` and `verify`/`drill` also write `inventory.dsse.json` / `drill.dsse.json` (DSSE + in-toto Statement v1, see attest-spec/SPEC.md). Verify with `python tools/attest_verify.py inventory.dsse.json --key pubkey.hex`. The older `.sig` files are deprecated and will be removed after one release. Canonical JSON is now ASCII-escaped (`ensure_ascii=True`), so inventory bytes for non-ASCII names differ from earlier runs.

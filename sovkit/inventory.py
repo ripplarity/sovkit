@@ -63,6 +63,18 @@ def write_inventory(estate: Estate, out: str) -> str:
         f.write(data)
     sign_file(p, os.path.join(out, "inventory.sig"))
     write_pubkey(out)
+    from sovkit.attest import run_mode, utc, write_attestation
+
+    now = utc()
+    write_attestation(
+        os.path.join(out, "inventory.dsse.json"),
+        [p],
+        "sovkit/inventory/v1",
+        {"tenant_id": estate.tenant_id, "object_count": len(estate.objects)},
+        now,
+        now,
+        run_mode(out),
+    )
     with open(os.path.join(out, "inventory.receipt.md"), "w", encoding="utf-8") as f:
         f.write(receipt_md(estate, sha256_bytes(data)))
     return p

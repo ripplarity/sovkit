@@ -43,7 +43,7 @@ def pubkey_b64() -> str:
 
 def canonical(obj) -> bytes:
     return json.dumps(
-        obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+        obj, sort_keys=True, separators=(",", ":"), ensure_ascii=True
     ).encode()
 
 
@@ -67,6 +67,8 @@ def sign_file(path: str, sig_path: str) -> None:
 
 
 def write_pubkey(out_dir: str) -> str:
+    with open(os.path.join(out_dir, "pubkey.hex"), "w") as f:
+        f.write(base64.b64decode(pubkey_b64()).hex() + "\n")
     p = os.path.join(out_dir, "pubkey.b64")
     with open(p, "w") as f:
         f.write(pubkey_b64() + "\n")

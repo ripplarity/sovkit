@@ -145,4 +145,21 @@ def verify_drill(out: str) -> dict:
     with open(rp, "w", encoding="utf-8") as f:
         f.write("\n".join(md))
     sign_file(rp, os.path.join(out, "drill.receipt.sig"))
+    from sovkit.attest import utc, write_attestation
+
+    write_attestation(
+        os.path.join(out, "drill.dsse.json"),
+        [os.path.join(out, "drill.json"), os.path.join(out, "diff.json"), rp],
+        "sovkit/drill/v1",
+        {
+            "result": "PASS" if ok else "FAIL",
+            "missing": len(missing),
+            "extra": len(extra),
+            "hash_mismatch": len(mismatch),
+            "copied": len(m["entries"]),
+        },
+        utc(m["started"]),
+        utc(),
+        "DRY-RUN",
+    )
     return {"ok": ok, "diff": diff, "sig_ok": sig_ok, "by_size": by_size}

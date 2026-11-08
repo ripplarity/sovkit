@@ -257,3 +257,61 @@ def test_cli_smoke(tmp_path):
     assert os.path.exists(f"{out}/drill.receipt.md")
     shutil.rmtree(tgt)
     assert r.invoke(app, ["verify", out]).exit_code == 1
+
+
+ATTEST_SPEC = os.path.join(
+    os.path.dirname(__file__), "..", "..", "attest-spec", "attest_verify.py"
+)
+LOCAL_VERIFIER = os.path.join(
+    os.path.dirname(__file__), "..", "tools", "attest_verify.py"
+)
+
+
+def _attest(env_path, key_path, *extra):
+    return subprocess.run(
+        [sys.executable, LOCAL_VERIFIER, env_path, "--key", key_path, *extra],
+        capture_output=True,
+        text=True,
+    ).returncode
+
+
+def test_inventory_dsse_verifies_and_detects_tamper(demo):
+    assert _attest(f"{demo}/inventory.dsse.json", f"{demo}/pubkey.hex") == 0
+    assert (
+        _attest(
+            f"{demo}/inventory.dsse.json", f"{demo}/pubkey.hex", "--check-subjects", demo
+        )
+        == 0
+    )
+    with open(f"{demo}/inventory.json", "ab") as f:
+        f.write(b" ")
+    assert (
+        _attest(
+            f"{demo}/inventory.dsse.json", f"{demo}/pubkey.hex", "--check-subjects", demo
+        )
+        == 3
+    )
+
+
+def test_drill_dsse_verifies(demo, tmp_path):
+    run_drill(demo, str(tmp_path / "t"), FIX)
+    verify_drill(demo)
+    assert (
+        _attest(
+            f"{demo}/drill.dsse.json", f"{demo}/pubkey.hex", "--check-subjects", demo
+        )
+        == 0
+    )
+
+
+def test_canonical_is_ascii_only():
+    assert canonical({"a": "é"}) == b'{"a":"\u00e9"}'
+
+
+def test_verifier_copy_identical_to_spec_repo():
+    import hashlib
+
+    if not os.path.exists(ATTEST_SPEC):
+        pytest.skip("attest-spec repo not alongside")
+    h = lambda p: hashlib.sha256(open(p, "rb").read()).hexdigest()  # noqa: E731
+    assert h(LOCAL_VERIFIER) == h(ATTEST_SPEC)
