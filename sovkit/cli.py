@@ -1,0 +1,99 @@
+import json
+import os
+import time
+
+import typer
+
+from sovkit.drill import run_drill, verify_drill
+from sovkit.inventory import load_inventory, write_inventory
+from sovkit.plan import build_runbook
+from sovkit.risk import risk_markdown, score_estate
+from sovkit.sources.fixture import load_fixture
+
+app = typer.Typer(add_completion=False, no_args_is_help=True)
+
+
+@app.command()
+def inventory(
+    fixture: str = typer.Option(None, help="fixture folder"),
+    graph: bool = typer.Option(
+        False, help="read a live tenant via Graph (env SOVKIT_*)"
+    ),
+    out: str = typer.Option("work/out"),
+):
+    """Write a signed inventory."""
+    if graph:
+        from sovkit.sources.graph import Graph, GraphError, read_estate
+
+        try:
+            tenant = os.environ["SOVKIT_TENANT"]
+            estate = read_estate(
+                Graph(), tenant, time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+            )
+        except (GraphError, KeyError) as e:
+            typer.echo(f"error: {e}", err=True)
+            raise typer.Exit(2)
+    elif fixture:
+        estate, _ = load_fixture(fixture)
+    else:
+        typer.echo("error: give --fixture or --graph", err=True)
+        raise typer.Exit(2)
+    os.makedirs(out, exist_ok=True)
+    if fixture:
+        with open(os.path.join(out, "fixture.path"), "w") as f:
+            f.write(os.path.abspath(fixture))
+    write_inventory(estate, out)
+    typer.echo(f"inventory: {len(estate.objects)} objects -> {out}")
+
+
+@app.command("map")
+def map_cmd(out: str):
+    """Map objects to openDesk targets and score risk."""
+    estate = load_inventory(out)
+    sc = score_estate(estate)
+    json.dump(
+        {
+            "estate_score": {"max": sc["max"], "weighted_mean": sc["weighted_mean"]},
+            "objects": sc["rows"],
+        },
+        open(os.path.join(out, "mapping.json"), "w", encoding="utf-8"),
+        indent=1,
+    )
+    open(os.path.join(out, "risk.md"), "w", encoding="utf-8").write(risk_markdown(sc))
+    typer.echo(f"mapped {len(estate.objects)} objects, max risk {sc['max']}")
+
+
+@app.command()
+def plan(out: str):
+    """Emit runbook.md."""
+    open(os.path.join(out, "runbook.md"), "w", encoding="utf-8").write(
+        build_runbook(load_inventory(out))
+    )
+    typer.echo("runbook.md written")
+
+
+@app.command()
+def drill(out: str, target: str = typer.Option(...), fixture: str = typer.Option(None)):
+    """Dry-run migration into a local target tree."""
+    fx = fixture
+    if not fx:
+        pp = os.path.join(out, "fixture.path")
+        if not os.path.exists(pp):
+            typer.echo("error: drill needs a fixture estate (--fixture)", err=True)
+            raise typer.Exit(2)
+        fx = open(pp).read().strip()
+    m = run_drill(out, target, fx)
+    typer.echo(
+        f"drill: {len(m['entries'])} objects copied in {m['copy_seconds']}s, {len(m['skipped_unmapped'])} unmapped skipped"
+    )
+
+
+@app.command()
+def verify(out: str):
+    """Re-inventory the drill target; write diff.json and signed drill.receipt.md. Exit 0 only if diff empty."""
+    r = verify_drill(out)
+    d = r["diff"]
+    typer.echo(
+        f"verify: {'PASS' if r['ok'] else 'FAIL'} missing={len(d['missing'])} extra={len(d['extra'])} mismatch={len(d['hash_mismatch'])}"
+    )
+    raise typer.Exit(0 if r["ok"] else 1)

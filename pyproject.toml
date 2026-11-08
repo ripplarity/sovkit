@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sovkit"
+version = "0.1.0"
+description = "Attested migration kit: Microsoft 365 estate to openDesk/Nextcloud"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "Apache-2.0" }
+dependencies = ["typer", "pydantic", "cryptography", "httpx", "pyyaml"]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[project.scripts]
+sovkit = "sovkit.cli:app"
+
+[tool.setuptools]
+packages = ["sovkit", "sovkit.sources"]

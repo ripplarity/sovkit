@@ -1,0 +1,305 @@
+tenant_id: demo-gemeente
+captured_at: '2026-11-08T00:00:00Z'
+objects:
+- id: o001
+  kind: user
+  name: clerk0@gemeente.example
+  owner: clerk0@gemeente.example
+  item_count: 0
+  last_modified: '2026-10-01T08:00:00Z'
+  flags: []
+- id: o002
+  kind: user
+  name: clerk1@gemeente.example
+  owner: clerk1@gemeente.example
+  item_count: 0
+  last_modified: '2026-10-01T08:00:00Z'
+  flags: []
+- id: o003
+  kind: user
+  name: clerk2@gemeente.example
+  owner: clerk2@gemeente.example
+  item_count: 0
+  last_modified: '2026-10-01T08:00:00Z'
+  flags: []
+- id: o004
+  kind: user
+  name: clerk3@gemeente.example
+  owner: clerk3@gemeente.example
+  item_count: 0
+  last_modified: '2026-10-01T08:00:00Z'
+  flags: []
+- id: o005
+  kind: user
+  name: clerk4@gemeente.example
+  owner: clerk4@gemeente.example
+  item_count: 0
+  last_modified: '2026-10-01T08:00:00Z'
+  flags: []
+- id: o006
+  kind: group
+  name: All Staff
+  owner: ''
+  item_count: 0
+  last_modified: '2026-10-01T08:00:00Z'
+  flags: []
+- id: o007
+  kind: group
+  name: Finance Team
+  owner: ''
+  item_count: 0
+  last_modified: '2026-10-01T08:00:00Z'
+  flags: []
+- id: o008
+  kind: mailbox
+  name: clerk0@gemeente.example
+  owner: clerk0@gemeente.example
+  item_count: 12
+  last_modified: '2026-10-01T08:00:00Z'
+  flags: []
+  file: files/o008.dat
+- id: o009
+  kind: mailbox
+  name: clerk1@gemeente.example
+  owner: clerk1@gemeente.example
+  item_count: 12
+  last_modified: '2026-10-01T08:00:00Z'
+  flags: []
+  file: files/o009.dat
+- id: o010
+  kind: mailbox
+  name: clerk2@gemeente.example
+  owner: clerk2@gemeente.example
+  item_count: 12
+  last_modified: '2026-10-01T08:00:00Z'
+  flags: []
+  file: files/o010.dat
+- id: o011
+  kind: mailbox
+  name: clerk3@gemeente.example
+  owner: clerk3@gemeente.example
+  item_count: 12
+  last_modified: '2026-10-01T08:00:00Z'
+  flags: []
+  file: files/o011.dat
+- id: o012
+  kind: mailbox
+  name: clerk4@gemeente.example
+  owner: clerk4@gemeente.example
+  item_count: 12
+  last_modified: '2026-10-01T08:00:00Z'
+  flags: []
+  file: files/o012.dat
+- id: o013
+  kind: site
+  name: Finance Site
+  owner: ''
+  item_count: 4
+  last_modified: '2026-10-01T08:00:00Z'
+  flags: []
+  file: files/o013.dat
+- id: o014
+  kind: site
+  name: Building Permits Site
+  owner: ''
+  item_count: 4
+  last_modified: '2026-10-01T08:00:00Z'
+  flags: []
+  file: files/o014.dat
+- id: o015
+  kind: site
+  name: Social Services Site
+  owner: ''
+  item_count: 4
+  last_modified: '2026-10-01T08:00:00Z'
+  flags: []
+  file: files/o015.dat
+- id: o016
+  kind: onedrive
+  name: clerk0 OneDrive
+  owner: clerk0@gemeente.example
+  item_count: 3
+  last_modified: '2026-10-01T08:00:00Z'
+  flags: []
+  file: files/o016.dat
+- id: o017
+  kind: team
+  name: Council Meetings
+  owner: ''
+  item_count: 0
+  last_modified: '2026-10-01T08:00:00Z'
+  flags: []
+- id: o018
+  kind: team
+  name: Emergency Response
+  owner: ''
+  item_count: 0
+  last_modified: '2026-10-01T08:00:00Z'
+  flags: []
+- id: o019
+  kind: document
+  name: budget2026.xlsx
+  owner: Finance Site
+  item_count: 1
+  last_modified: '2026-10-01T08:00:00Z'
+  flags: []
+  file: files/o019.dat
+- id: o020
+  kind: document
+  name: minutes.docx
+  owner: Finance Site
+  item_count: 1
+  last_modified: '2026-10-01T08:00:00Z'
+  flags: []
+  file: files/o020.dat
+- id: o021
+  kind: document
+  name: slides.pptx
+  owner: Finance Site
+  item_count: 1
+  last_modified: '2026-10-01T08:00:00Z'
+  flags: []
+  file: files/o021.dat
+- id: o022
+  kind: document
+  name: 'Zoning über/Plan: v2?.docx'
+  owner: Finance Site
+  item_count: 1
+  last_modified: '2026-10-01T08:00:00Z'
+  flags: []
+  file: files/o022.dat
+- id: o023
+  kind: document
+  name: permits.accdb
+  owner: Building Permits Site
+  item_count: 1
+  last_modified: '2026-10-01T08:00:00Z'
+  flags: []
+  file: files/o023.dat
+- id: o024
+  kind: document
+  name: citizens.accdb
+  owner: Building Permits Site
+  item_count: 1
+  last_modified: '2026-10-01T08:00:00Z'
+  flags: []
+  file: files/o024.dat
+- id: o025
+  kind: document
+  name: legacy_assets.mdb
+  owner: Building Permits Site
+  item_count: 1
+  last_modified: '2026-10-01T08:00:00Z'
+  flags: []
+  file: files/o025.dat
+- id: o026
+  kind: document
+  name: payroll.xlsm
+  owner: Finance Site
+  item_count: 1
+  last_modified: '2026-10-01T08:00:00Z'
+  flags: []
+  file: files/o026.dat
+- id: o027
+  kind: document
+  name: invoice_macro.xlsm
+  owner: Finance Site
+  item_count: 1
+  last_modified: '2026-10-01T08:00:00Z'
+  flags: []
+  file: files/o027.dat
+- id: o028
+  kind: planner
+  name: Road Works 2027
+  owner: ''
+  item_count: 0
+  last_modified: '2026-10-01T08:00:00Z'
+  flags: []
+- id: o029
+  kind: planner
+  name: School Renovation
+  owner: ''
+  item_count: 0
+  last_modified: '2026-10-01T08:00:00Z'
+  flags: []
+- id: o030
+  kind: form
+  name: Citizen Survey
+  owner: ''
+  item_count: 0
+  last_modified: '2026-10-01T08:00:00Z'
+  flags: []
+- id: o031
+  kind: form
+  name: Event Signup
+  owner: ''
+  item_count: 0
+  last_modified: '2026-10-01T08:00:00Z'
+  flags: []
+- id: o032
+  kind: flow
+  name: Approve Permit Flow
+  owner: ''
+  item_count: 0
+  last_modified: '2026-10-01T08:00:00Z'
+  flags: []
+- id: o033
+  kind: powerapp
+  name: Fleet Inspection App
+  owner: ''
+  item_count: 0
+  last_modified: '2026-10-01T08:00:00Z'
+  flags: []
+- id: o034
+  kind: document
+  name: annual_report.docx
+  owner: Finance Site
+  item_count: 1
+  last_modified: '2026-10-01T08:00:00Z'
+  flags: []
+  file: files/o034.dat
+- id: o035
+  kind: document
+  name: remote_large.pdf
+  owner: Finance Site
+  item_count: 1
+  last_modified: '2026-10-01T08:00:00Z'
+  flags: []
+  size_bytes: 2048
+- id: o036
+  kind: planner
+  name: Library Move
+  owner: ''
+  item_count: 0
+  last_modified: '2026-10-01T08:00:00Z'
+  flags: []
+- id: o037
+  kind: onedrive
+  name: clerk1 OneDrive
+  owner: clerk1@gemeente.example
+  item_count: 2
+  last_modified: '2026-10-01T08:00:00Z'
+  flags: []
+  file: files/o037.dat
+- id: o038
+  kind: group
+  name: Schools Team
+  owner: ''
+  item_count: 0
+  last_modified: '2026-10-01T08:00:00Z'
+  flags: []
+- id: o039
+  kind: team
+  name: IT Helpdesk
+  owner: ''
+  item_count: 0
+  last_modified: '2026-10-01T08:00:00Z'
+  flags: []
+- id: o040
+  kind: document
+  name: timetable.xlsx
+  owner: Schools Site
+  item_count: 1
+  last_modified: '2026-10-01T08:00:00Z'
+  flags: []
+  file: files/o040.dat
