@@ -102,6 +102,9 @@ def verify(
     Exit 0 only if diff empty and every object is hash-verified; 2 = PASS-SIZE-ONLY."""
     r = verify_drill(out, expect_keyid, allow_size_only)
     d = r["diff"]
+    if r["sig_error"]:
+        typer.echo(f"verify: FAIL {r['sig_error']}", err=True)
+        raise typer.Exit(1)
     if r["ok"] and r["size_only"]:
         typer.echo(
             f"PASS-SIZE-ONLY ({len(r['unhashed'])}: {', '.join(r['unhashed'])})", err=True

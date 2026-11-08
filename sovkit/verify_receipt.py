@@ -26,7 +26,7 @@ def verify(file_path, sig_path, pub, expect_keyid=None):
     sig = base64.b64decode(open(sig_path).read().strip())
     raw = base64.b64decode(pub.strip())
     if hashlib.sha256(raw).hexdigest() != expect_keyid.strip().lower():
-        raise ValueError("public key does not match the pinned keyid")
+        raise ValueError("key does not match pin")
     key = Ed25519PublicKey.from_public_bytes(raw)
     key.verify(sig, open(file_path, "rb").read())
 

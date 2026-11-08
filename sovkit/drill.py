@@ -112,6 +112,7 @@ def verify_drill(
     m = json.load(open(os.path.join(out, "drill.json"), encoding="utf-8"))
     inv = os.path.join(out, "inventory.json")
     sig_ok = True
+    sig_error = ""
     try:
         verify_sig(
             inv,
@@ -119,8 +120,9 @@ def verify_drill(
             os.path.join(out, "pubkey.b64"),
             expect_keyid,
         )
-    except Exception:
+    except Exception as e:
         sig_ok = False
+        sig_error = str(e) or "inventory signature invalid"
     estate = load_inventory(out)
     exp, unhashed, disagree = {}, [], []
     for o in estate.objects:
@@ -212,5 +214,6 @@ def verify_drill(
         "sig_ok": sig_ok,
         "by_size": by_size,
         "unhashed": unhashed,
+        "sig_error": sig_error,
         "size_only": bool(unhashed) and not allow_size_only,
     }

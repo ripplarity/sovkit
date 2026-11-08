@@ -1,4 +1,4 @@
-"""ed25519 signing, adapted from the nukekit receipt pattern. Keys live under ~/.sovkit/."""
+"""ed25519 signing, as in other Ripplarity tools. Keys live under ~/.sovkit/."""
 
 import base64
 import hashlib

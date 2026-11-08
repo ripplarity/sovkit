@@ -295,6 +295,8 @@ LOCAL_VERIFIER = os.path.join(
 
 
 def _attest(env_path, key_path, *extra):
+    if "--expect-keyid" not in extra:
+        extra = ("--expect-keyid", keyid(), *extra)
     return subprocess.run(
         [sys.executable, LOCAL_VERIFIER, env_path, "--key", key_path, *extra],
         capture_output=True,
@@ -306,7 +308,10 @@ def test_inventory_dsse_verifies_and_detects_tamper(demo):
     assert _attest(f"{demo}/inventory.dsse.json", f"{demo}/pubkey.hex") == 0
     assert (
         _attest(
-            f"{demo}/inventory.dsse.json", f"{demo}/pubkey.hex", "--check-subjects", demo
+            f"{demo}/inventory.dsse.json",
+            f"{demo}/pubkey.hex",
+            "--check-subjects",
+            demo,
         )
         == 0
     )
@@ -314,7 +319,10 @@ def test_inventory_dsse_verifies_and_detects_tamper(demo):
         f.write(b" ")
     assert (
         _attest(
-            f"{demo}/inventory.dsse.json", f"{demo}/pubkey.hex", "--check-subjects", demo
+            f"{demo}/inventory.dsse.json",
+            f"{demo}/pubkey.hex",
+            "--check-subjects",
+            demo,
         )
         == 3
     )
@@ -332,7 +340,7 @@ def test_drill_dsse_verifies(demo, tmp_path):
 
 
 def test_canonical_is_ascii_only():
-    assert canonical({"a": "é"}) == b'{"a":"\u00e9"}'
+    assert canonical({"a": "é"}) == rb'{"a":"\u00e9"}'
 
 
 def test_verifier_copy_identical_to_spec_repo():
@@ -340,7 +348,7 @@ def test_verifier_copy_identical_to_spec_repo():
 
     if not os.path.exists(ATTEST_SPEC):
         pytest.skip("attest-spec repo not alongside")
-    h = lambda p: hashlib.sha256(open(p, "rb").read()).hexdigest()  # noqa: E731
+    h = lambda p: hashlib.sha256(open(p, "rb").read()).hexdigest()
     assert h(LOCAL_VERIFIER) == h(ATTEST_SPEC)
 
 
@@ -425,3 +433,40 @@ def test_unhashed_same_size_change_is_size_only_rc2(demo, tmp_path):
     assert r.exit_code == 2
     assert "PASS-SIZE-ONLY" in r.output and "remote_large" in r.output
     assert "remote_large" in open(f"{demo}/drill.receipt.md").read()
+
+
+def test_attest_verify_requires_pin(demo):
+    r = subprocess.run(
+        [
+            sys.executable,
+            LOCAL_VERIFIER,
+            f"{demo}/inventory.dsse.json",
+            "--key",
+            f"{demo}/pubkey.hex",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert r.returncode == 2 and "pinned keyid required" in r.stderr
+
+
+def test_wrong_pin_says_key_does_not_match_pin(demo, tmp_path):
+    run_drill(demo, str(tmp_path / "t"), FIX)
+    r = CliRunner().invoke(
+        app, ["verify", demo, "--expect-keyid", "00" * 32, "--allow-size-only"]
+    )
+    assert r.exit_code == 1 and "key does not match pin" in r.output
+
+
+def test_writer_jcs_matches_verifier_jcs():
+    import importlib.util
+
+    from sovkit.attest import jcs
+
+    spec = importlib.util.spec_from_file_location("av", LOCAL_VERIFIER)
+    av = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(av)
+    for o in ({"b": 1, "a": ["é", None, True]}, {"𐀀": 1, "￿": 2}):
+        assert jcs(o) == av.jcs(o)
+    with pytest.raises(ValueError):
+        jcs({"x": 1.5})
