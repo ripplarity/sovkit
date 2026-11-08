@@ -2,7 +2,7 @@
 """attest_verify: offline verifier for DSSE / in-toto Statement v1 attestations (see SPEC.md).
 
 Usage: python attest_verify.py <envelope.dsse.json> --key <hex pubkey | keys.json>
-                               [--check-subjects DIR]
+                               [--check-subjects DIR] [--expect-keyid HEX]
 Exit: 0 valid, 2 bad signature/envelope, 3 subject digest mismatch,
       4 malformed statement or missing mandatory fields, 5 unknown predicateType
       (after printing VALID-SIGNATURE). No network access. Deps: stdlib + cryptography.
@@ -84,6 +84,7 @@ def main(argv=None) -> int:
     ap.add_argument("envelope")
     ap.add_argument("--key", required=True)
     ap.add_argument("--check-subjects", metavar="DIR")
+    ap.add_argument("--expect-keyid", metavar="HEX", help="pin: signing key must have this keyid")
     a = ap.parse_args(argv)
     try:
         env = json.load(open(a.envelope, encoding="utf-8"))
@@ -96,6 +97,19 @@ def main(argv=None) -> int:
         print(f"INVALID: unreadable envelope or key: {e}", file=sys.stderr)
         return 2
     by_id = {keyid(k): k for k in keys}
+    if a.expect_keyid:
+        # a key found beside the artefact is untrusted unless it matches the pinned keyid
+        by_id = {i: k for i, k in by_id.items() if i == a.expect_keyid.lower()}
+        if not by_id:
+            print("INVALID: supplied key does not match --expect-keyid", file=sys.stderr)
+            return 2
+    elif os.path.dirname(os.path.abspath(a.key)) == os.path.dirname(
+        os.path.abspath(a.envelope)
+    ) and os.path.isfile(a.key):
+        print(
+            "WARNING: key file sits beside the envelope and is not pinned; pass --expect-keyid",
+            file=sys.stderr,
+        )
     msg = pae(env["payloadType"], payload)
     ok = False
     for s in sigs:

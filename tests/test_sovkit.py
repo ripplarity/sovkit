@@ -1,3 +1,5 @@
+import hashlib
+import json
 import os
 import shutil
 import subprocess
@@ -12,7 +14,7 @@ from sovkit.mapping import KINDS, map_object
 from sovkit.models import Estate, EstateObject
 from sovkit.plan import build_runbook
 from sovkit.risk import score_estate
-from sovkit.signing import canonical
+from sovkit.signing import canonical, keyid
 from sovkit.sources.fixture import load_fixture
 from sovkit.sources.graph import Graph, GraphError, read_estate
 from sovkit.verify_receipt import verify
@@ -67,7 +69,14 @@ def test_inventory_deterministic(tmp_path):
 
 
 def test_signature_verifies(demo):
-    verify(f"{demo}/inventory.json", f"{demo}/inventory.sig", f"{demo}/pubkey.b64")
+    verify(
+        f"{demo}/inventory.json",
+        f"{demo}/inventory.sig",
+        f"{demo}/pubkey.b64",
+        keyid(),
+    )
+    with pytest.raises(ValueError):
+        verify(f"{demo}/inventory.json", f"{demo}/inventory.sig", f"{demo}/pubkey.b64")
 
 
 def test_tamper_fails(demo):
@@ -76,7 +85,7 @@ def test_tamper_fails(demo):
     b[10] ^= 1
     open(p, "wb").write(bytes(b))
     with pytest.raises(Exception):
-        verify(p, f"{demo}/inventory.sig", f"{demo}/pubkey.b64")
+        verify(p, f"{demo}/inventory.sig", f"{demo}/pubkey.b64", keyid())
 
 
 def test_standalone_verifier_exit_codes(demo):
@@ -87,6 +96,8 @@ def test_standalone_verifier_exit_codes(demo):
         f"{demo}/inventory.sig",
         f"{demo}/pubkey.b64",
     ]
+    assert subprocess.run(args).returncode == 2  # no pin -> usage error
+    args += ["--expect-keyid", keyid()]
     assert subprocess.run(args).returncode == 0
     p = f"{demo}/inventory.json"
     b = bytearray(open(p, "rb").read())
@@ -164,11 +175,14 @@ def test_sanitize_edge_cases():
 def test_drill_demo_diff_empty(demo, tmp_path):
     t = str(tmp_path / "t")
     run_drill(demo, t, FIX)
-    r = verify_drill(demo)
+    r = verify_drill(demo, keyid(), True)
     assert r["ok"] and r["diff"] == {"missing": [], "extra": [], "hash_mismatch": []}
     assert r["by_size"] == 1  # remote_large.pdf is UNHASHED
     verify(
-        f"{demo}/drill.receipt.md", f"{demo}/drill.receipt.sig", f"{demo}/pubkey.b64"
+        f"{demo}/drill.receipt.md",
+        f"{demo}/drill.receipt.sig",
+        f"{demo}/pubkey.b64",
+        keyid(),
     )
 
 
@@ -179,7 +193,7 @@ def test_drill_detects_tamper_missing_extra(demo, tmp_path):
     open(victim, "ab").write(b"x")
     os.remove(os.path.join(t, *m["entries"][1]["path"].split("/")))
     open(os.path.join(t, "stray.txt"), "w").write("s")
-    r = verify_drill(demo)
+    r = verify_drill(demo, keyid(), True)
     assert not r["ok"]
     assert (
         len(r["diff"]["hash_mismatch"]) == 1
@@ -253,10 +267,23 @@ def test_cli_smoke(tmp_path):
     assert r.invoke(app, ["map", out]).exit_code == 0
     assert r.invoke(app, ["plan", out]).exit_code == 0
     assert r.invoke(app, ["drill", out, "--target", tgt]).exit_code == 0
-    assert r.invoke(app, ["verify", out]).exit_code == 0
+    k = keyid()
+    assert r.invoke(app, ["verify", out]).exit_code != 0  # pin is required
+    assert r.invoke(app, ["verify", out, "--expect-keyid", k]).exit_code == 2
+    assert (
+        r.invoke(
+            app, ["verify", out, "--expect-keyid", k, "--allow-size-only"]
+        ).exit_code
+        == 0
+    )
     assert os.path.exists(f"{out}/drill.receipt.md")
     shutil.rmtree(tgt)
-    assert r.invoke(app, ["verify", out]).exit_code == 1
+    assert (
+        r.invoke(
+            app, ["verify", out, "--expect-keyid", k, "--allow-size-only"]
+        ).exit_code
+        == 1
+    )
 
 
 ATTEST_SPEC = os.path.join(
@@ -295,7 +322,7 @@ def test_inventory_dsse_verifies_and_detects_tamper(demo):
 
 def test_drill_dsse_verifies(demo, tmp_path):
     run_drill(demo, str(tmp_path / "t"), FIX)
-    verify_drill(demo)
+    verify_drill(demo, keyid(), True)
     assert (
         _attest(
             f"{demo}/drill.dsse.json", f"{demo}/pubkey.hex", "--check-subjects", demo
@@ -315,3 +342,86 @@ def test_verifier_copy_identical_to_spec_repo():
         pytest.skip("attest-spec repo not alongside")
     h = lambda p: hashlib.sha256(open(p, "rb").read()).hexdigest()  # noqa: E731
     assert h(LOCAL_VERIFIER) == h(ATTEST_SPEC)
+
+
+def test_forged_key_dsse_fails_when_pinned(demo):
+    import base64
+    import hashlib
+
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+    from sovkit.attest import make_envelope
+
+    good = keyid()
+    bad = Ed25519PrivateKey.generate()
+    env = json.load(open(f"{demo}/inventory.dsse.json"))
+    stmt = json.loads(base64.b64decode(env["payload"]))
+    stmt["predicate"]["tenant_id"] = "EVIL"
+    forged = make_envelope(stmt, bad)
+    json.dump(forged, open(f"{demo}/inventory.dsse.json", "w"))
+    raw = bad.public_key().public_bytes(
+        serialization.Encoding.Raw, serialization.PublicFormat.Raw
+    )
+    open(f"{demo}/pubkey.hex", "w").write(raw.hex())  # attacker's key beside it
+    assert hashlib.sha256(raw).hexdigest() != good
+    assert (
+        _attest(
+            f"{demo}/inventory.dsse.json",
+            f"{demo}/pubkey.hex",
+            "--expect-keyid",
+            good,
+        )
+        == 2
+    )
+
+
+def test_forged_key_legacy_sig_fails_when_pinned(demo):
+    import base64
+
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+    bad = Ed25519PrivateKey.generate()
+    b = open(f"{demo}/inventory.json", "rb").read().replace(b"tenant", b"tenent", 1)
+    open(f"{demo}/inventory.json", "wb").write(b)
+    open(f"{demo}/inventory.sig", "w").write(base64.b64encode(bad.sign(b)).decode())
+    raw = bad.public_key().public_bytes(
+        serialization.Encoding.Raw, serialization.PublicFormat.Raw
+    )
+    open(f"{demo}/pubkey.b64", "w").write(base64.b64encode(raw).decode())
+    with pytest.raises(ValueError):
+        verify(
+            f"{demo}/inventory.json",
+            f"{demo}/inventory.sig",
+            f"{demo}/pubkey.b64",
+            keyid(),
+        )
+
+
+def test_tampered_drill_json_fails(demo, tmp_path):
+    t = str(tmp_path / "t")
+    m = run_drill(demo, t, FIX)
+    e = next(x for x in m["entries"] if x["mode"] == "hash" and x["size"] > 0)
+    victim = os.path.join(t, *e["path"].split("/"))
+    data = bytearray(open(victim, "rb").read())
+    data[0] ^= 1
+    open(victim, "wb").write(bytes(data))
+    e["sha256"] = hashlib.sha256(bytes(data)).hexdigest()  # attacker edits drill.json
+    json.dump(m, open(f"{demo}/drill.json", "w"))
+    r = verify_drill(demo, keyid(), True)
+    assert not r["ok"]
+    assert e["path"] in r["diff"]["drill_json_disagrees"] or r["diff"]["hash_mismatch"]
+
+
+def test_unhashed_same_size_change_is_size_only_rc2(demo, tmp_path):
+    t = str(tmp_path / "t")
+    m = run_drill(demo, t, FIX)
+    e = next(x for x in m["entries"] if x["mode"] == "size")
+    victim = os.path.join(t, *e["path"].split("/"))
+    data = bytearray(open(victim, "rb").read())
+    data[0] ^= 0xFF
+    open(victim, "wb").write(bytes(data))  # same size, different bytes
+    r = CliRunner().invoke(app, ["verify", demo, "--expect-keyid", keyid()])
+    assert r.exit_code == 2
+    assert "PASS-SIZE-ONLY" in r.output and "remote_large" in r.output
+    assert "remote_large" in open(f"{demo}/drill.receipt.md").read()

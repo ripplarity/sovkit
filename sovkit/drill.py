@@ -90,11 +90,56 @@ def run_drill(out: str, target: str, fixture: str) -> dict:
     return manifest
 
 
-def verify_drill(out: str) -> dict:
+def expected_entry(o):
+    """Expected (mode, sha256, size) for a mapped object, derived ONLY from the signed inventory."""
+    if o.sha256:
+        return "hash", o.sha256, o.size_bytes
+    if "UNHASHED" in o.flags:
+        return "size", None, o.size_bytes
+    data = canonical(o.model_dump())
+    return "hash", sha256_bytes(data), len(data)
+
+
+def verify_drill(
+    out: str, expect_keyid: str = None, allow_size_only: bool = False
+) -> dict:
+    """Verify a drill. expect_keyid (sha256 hex of the producer public key) is REQUIRED:
+    the inventory signature is checked against that pin, and expected hashes come only from
+    the signed inventory.json; drill.json must agree with it or the drill FAILS."""
+    if not expect_keyid:
+        raise ValueError("expect_keyid is required: no unpinned verification")
     t0 = time.time()
     m = json.load(open(os.path.join(out, "drill.json"), encoding="utf-8"))
+    inv = os.path.join(out, "inventory.json")
+    sig_ok = True
+    try:
+        verify_sig(
+            inv,
+            os.path.join(out, "inventory.sig"),
+            os.path.join(out, "pubkey.b64"),
+            expect_keyid,
+        )
+    except Exception:
+        sig_ok = False
+    estate = load_inventory(out)
+    exp, unhashed, disagree = {}, [], []
+    for o in estate.objects:
+        if not map_object(o)["mapped"]:
+            continue
+        mode, sha, size = expected_entry(o)
+        exp[target_rel(o)] = (mode, sha, size)
+        if mode == "size":
+            unhashed.append(o.name)
+    drill_entries = {e["path"]: e for e in m["entries"]}
+    for rel in sorted(set(exp) | set(drill_entries)):
+        e = drill_entries.get(rel)
+        x = exp.get(rel)
+        if e is None or x is None:
+            disagree.append(rel)
+        elif e["mode"] != x[0] or e["size"] != x[2] or (x[0] == "hash" and e["sha256"] != x[1]):
+            disagree.append(rel)
     target = m["target"]
-    expected = {e["path"]: e for e in m["entries"]}
+    expected = {rel: {"mode": x[0], "sha256": x[1], "size": x[2]} for rel, x in exp.items()}
     actual = set()
     for root, _, fs in os.walk(target):
         for fn in fs:
@@ -115,28 +160,26 @@ def verify_drill(out: str) -> dict:
         elif sha256_file(p) != e["sha256"]:
             mismatch.append(rel)
     diff = {"missing": missing, "extra": extra, "hash_mismatch": sorted(mismatch)}
-    inv = os.path.join(out, "inventory.json")
-    sig_ok = True
-    try:
-        verify_sig(
-            inv, os.path.join(out, "inventory.sig"), os.path.join(out, "pubkey.b64")
-        )
-    except Exception:
-        sig_ok = False
-    ok = sig_ok and not (missing or extra or mismatch)
+    if disagree:
+        diff["drill_json_disagrees"] = disagree
+    ok = sig_ok and not (missing or extra or mismatch or disagree)
     verify_seconds = round(time.time() - t0, 3)
     with open(os.path.join(out, "diff.json"), "w", encoding="utf-8") as f:
         json.dump(diff, f, indent=1, sort_keys=True)
     md = [
         "# sovkit drill receipt",
         "",
-        f"- result: {'PASS' if ok else 'FAIL'}",
+        f"- result: {'FAIL' if not ok else 'PASS-SIZE-ONLY' if (unhashed and not allow_size_only) else 'PASS'}",
+        f"- drill.json disagrees with signed inventory: {len(disagree)}",
         f"- inventory signature valid: {sig_ok}",
         f"- inventory.json sha256: {sha256_file(inv)}",
         f"- before: {len(m['entries']) + len(m['skipped_unmapped'])} objects ({len(m['skipped_unmapped'])} unmapped, left for manual)",
         f"- after: {len(actual)} files in target",
         f"- missing: {len(missing)}, extra: {len(extra)}, hash mismatch: {len(mismatch)}",
         f"- verified_by_size only (UNHASHED, no content hash available): {by_size}",
+    ]
+    md += [f"  - UNHASHED: {n}" for n in unhashed]
+    md += [
         f"- copy seconds: {m['copy_seconds']}, verify seconds: {verify_seconds}",
         f"- diff.json sha256: {sha256_file(os.path.join(out, 'diff.json'))}",
         "",
@@ -152,7 +195,8 @@ def verify_drill(out: str) -> dict:
         [os.path.join(out, "drill.json"), os.path.join(out, "diff.json"), rp],
         "sovkit/drill/v1",
         {
-            "result": "PASS" if ok else "FAIL",
+            "result": "FAIL" if not ok else "PASS-SIZE-ONLY" if (unhashed and not allow_size_only) else "PASS",
+            "unhashed": unhashed,
             "missing": len(missing),
             "extra": len(extra),
             "hash_mismatch": len(mismatch),
@@ -162,4 +206,11 @@ def verify_drill(out: str) -> dict:
         utc(),
         "DRY-RUN",
     )
-    return {"ok": ok, "diff": diff, "sig_ok": sig_ok, "by_size": by_size}
+    return {
+        "ok": ok,
+        "diff": diff,
+        "sig_ok": sig_ok,
+        "by_size": by_size,
+        "unhashed": unhashed,
+        "size_only": bool(unhashed) and not allow_size_only,
+    }

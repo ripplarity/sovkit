@@ -41,6 +41,11 @@ def pubkey_b64() -> str:
     return base64.b64encode(raw).decode()
 
 
+def keyid() -> str:
+    """Lowercase hex sha256 of the raw public key (publish this; verifiers pin it)."""
+    return sha256_bytes(base64.b64decode(pubkey_b64()))
+
+
 def canonical(obj) -> bytes:
     return json.dumps(
         obj, sort_keys=True, separators=(",", ":"), ensure_ascii=True

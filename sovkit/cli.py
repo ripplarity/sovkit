@@ -89,11 +89,33 @@ def drill(out: str, target: str = typer.Option(...), fixture: str = typer.Option
 
 
 @app.command()
-def verify(out: str):
-    """Re-inventory the drill target; write diff.json and signed drill.receipt.md. Exit 0 only if diff empty."""
-    r = verify_drill(out)
+def verify(
+    out: str,
+    expect_keyid: str = typer.Option(
+        ..., help="trusted producer keyid (sha256 hex of the public key); see `sovkit keyid`"
+    ),
+    allow_size_only: bool = typer.Option(
+        False, help="accept UNHASHED objects verified by size only"
+    ),
+):
+    """Re-inventory the drill target; write diff.json and signed drill.receipt.md.
+    Exit 0 only if diff empty and every object is hash-verified; 2 = PASS-SIZE-ONLY."""
+    r = verify_drill(out, expect_keyid, allow_size_only)
     d = r["diff"]
+    if r["ok"] and r["size_only"]:
+        typer.echo(
+            f"PASS-SIZE-ONLY ({len(r['unhashed'])}: {', '.join(r['unhashed'])})", err=True
+        )
+        raise typer.Exit(2)
     typer.echo(
-        f"verify: {'PASS' if r['ok'] else 'FAIL'} missing={len(d['missing'])} extra={len(d['extra'])} mismatch={len(d['hash_mismatch'])}"
+        f"verify: {'PASS' if r['ok'] else 'FAIL'} missing={len(d['missing'])} extra={len(d['extra'])} mismatch={len(d['hash_mismatch'])} disagree={len(d.get('drill_json_disagrees', []))}"
     )
     raise typer.Exit(0 if r["ok"] else 1)
+
+
+@app.command()
+def keyid():
+    """Print this install's producer keyid (publish it; verifiers pin it)."""
+    from sovkit.signing import keyid as _kid
+
+    typer.echo(_kid())
