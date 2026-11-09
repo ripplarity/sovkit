@@ -1,7 +1,7 @@
 # Throwaway Nextcloud for the sovkit drill. Credentials come from the environment (see .env.example); never commit them.
 services:
   nextcloud:
-    image: nextcloud:stable
+    image: nextcloud:34.0.5
     container_name: sovkit-nextcloud
     ports:
       - "8180:80"

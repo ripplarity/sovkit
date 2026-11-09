@@ -1,6 +1,6 @@
 # Real drill against Nextcloud
 
-Run on 2026-11-08 (UTC) on a Windows 11 workstation, Docker 29.4.2, image `nextcloud:stable` (Nextcloud 34.0.5, SQLite).
+Run on 2026-11-08 (UTC) on a Windows 11 workstation, Docker 29.4.2, image `nextcloud:34.0.5` (SQLite).
 Fixture: `fixtures/demo_municipality` (40 objects: 33 mapped, 7 unmapped left for manual).
 
 ## What goes where
@@ -15,13 +15,13 @@ Fixture: `fixtures/demo_municipality` (40 objects: 33 mapped, 7 unmapped left fo
 
     cd drill
     export SOVKIT_NC_USER=admin SOVKIT_NC_PASS=<choose a long random value>   # see drill/.env.example
-    docker compose up -d                 # pulls nextcloud:stable, starts on http://localhost:8180
-    # wait until `docker inspect -f '{{.State.Health.Status}}' sovkit-nextcloud` prints healthy
+    docker compose up -d                 # pulls nextcloud:34.0.5, starts on http://localhost:8180
+    bash wait_healthy.sh                 # polls `docker inspect -f '{{.State.Health.Status}}' sovkit-nextcloud` until healthy, 180 s timeout
     cd ..
     python -m sovkit inventory --fixture fixtures/demo_municipality --out work/nc
     python -m sovkit drill work/nc --target nextcloud://localhost:8180
     KID=$(python -m sovkit keyid)
-    python -m sovkit verify work/nc --expect-keyid $KID                      # strict
+    python -m sovkit verify work/nc --expect-keyid $KID                      # strict: exits 2 on the demo because remote_large.pdf is size-only (see README)
     python -m sovkit verify work/nc --expect-keyid $KID --allow-size-only
     python tools/attest_verify.py work/nc/drill.dsse.json --key work/nc/pubkey.hex --expect-keyid $KID --check-subjects work/nc
     cd drill && docker compose down -v
