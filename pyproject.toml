@@ -9,7 +9,7 @@ description = "Attested migration kit: Microsoft 365 estate to openDesk/Nextclou
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "Apache-2.0" }
-dependencies = ["typer", "pydantic", "cryptography", "httpx", "pyyaml"]
+dependencies = ["typer", "pydantic", "cryptography", "httpx", "pyyaml", "openpyxl"]
 
 [project.optional-dependencies]
 dev = ["pytest"]

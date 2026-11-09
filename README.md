@@ -49,6 +49,10 @@ The last command prints `PASS-SIZE-ONLY (1: remote_large.pdf)` and exits 2 on th
 | Drill | `sovkit drill` (local folder or `nextcloud://` over WebDAV) | the rehearsed move + `drill.dsse.json` |
 | Verify | `sovkit verify --expect-keyid` | hashes checked against the signed inventory |
 
+## Excel long-tail scan
+
+`sovkit excel-scan <dir> [--out work/demo] [--roundtrip]` walks a synced OneDrive/SharePoint folder (local files only, no Microsoft API) for `.xlsx/.xlsm/.xlsb/.xls` and flags VBA, Power Query, external links, pivot caches, data connections, and LAMBDA/LET/dynamic-array functions. HIGH = VBA, Power Query, LAMBDA/LET; MEDIUM = dynamic arrays, external links, connections, pivot caches, binary formats (manual review), unreadable; LOW = none. Counts per top-level folder; the result is a signed `excel_scan.json` and a section appended to the inventory receipt. `--roundtrip` diffs values through LibreOffice if `soffice` is on PATH, else reports UNTESTED.
+
 ## Evidence
 
 | Result | Where |

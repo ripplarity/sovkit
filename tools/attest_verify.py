@@ -32,9 +32,16 @@ KNOWN = {
     BASE + "nukekit/mirror/v1",  # deprecated alias of dejaspawn/mirror/v1; still known
     BASE + "stillherd/silent/v1",
     BASE + "stillherd/day/v1",
+    BASE + "dejaspawn/evidence/v1",
+    BASE + "mictest/participant/v1",
+    BASE + "halflife/receipt/v1",
+    BASE + "canceltogether/campaign/v1",
+    BASE + "buyatheorem/lemma/v1",
+    "https://udoot.com/attestation/egress/v1",  # separate developer identity; full URI, not under BASE
 }
 RUN_MODES = {"REAL", "MOCK", "FIXTURE", "DRY-RUN"}
 MAX_INT = 2**53 - 1
+REKOR_KEY_SHA256 = "dce5ef715502ec9f3cdfd11f8cc384b31a6141023d3e7595e9908a81cb6241bd"
 
 
 # ---- RFC 8785 (JCS) canonical JSON, restricted to strings/integers/booleans/null/arrays/objects ----
@@ -111,6 +118,39 @@ def small_order(pt) -> bool:
     return pt == (0, 1)
 
 
+def _mul(k: int, pt):
+    r = (0, 1)
+    while k:
+        if k & 1:
+            r = _add(r, pt)
+        pt = _add(pt, pt)
+        k >>= 1
+    return r
+
+
+def prime_order(pt) -> bool:
+    """[L]P = O (the identity also passes; small_order() excludes it separately)."""
+    return _mul(_L, pt) == (0, 1)
+
+
+def encode_point(pt) -> bytes:
+    return (pt[1] | ((pt[0] & 1) << 255)).to_bytes(32, "little")
+
+
+_B = decompress(bytes.fromhex("58" + "66" * 31))
+_DOM_PH = b"SigEd25519 no Ed25519 collisions" + bytes([1, 0])  # dom2(1, "") for Ed25519ph
+
+
+def ed25519ph_verify(pub: bytes, digest64: bytes, sig: bytes) -> bool:
+    """RFC 8032 Ed25519ph, empty context, where `digest64` is already PH(M) = SHA-512(M).
+    Cofactorless: [S]B == R + [k]A, with canonical S and prime-order A and R."""
+    if len(pub) != 32 or len(sig) != 64 or len(digest64) != 64 or strict_ed25519_ok(pub, sig):
+        return False
+    a, r = decompress(pub), decompress(sig[:32])
+    k = int.from_bytes(hashlib.sha512(_DOM_PH + sig[:32] + pub + digest64).digest(), "little") % _L
+    return _mul(int.from_bytes(sig[32:], "little"), _B) == _add(r, _mul(k, a))
+
+
 def strict_ed25519_ok(pub: bytes, sig: bytes) -> str:
     """Return "" if the encodings are acceptable, else the reason."""
     if len(pub) != 32 or len(sig) != 64:
@@ -120,9 +160,13 @@ def strict_ed25519_ok(pub: bytes, sig: bytes) -> str:
     a = decompress(pub)
     if a is None or small_order(a):
         return "non-canonical or small-order public key"
+    if not prime_order(a):
+        return "public key is not prime-order ([L]A != O)"
     r = decompress(sig[:32])
     if r is None or small_order(r):
         return "malformed or small-order R"
+    if not prime_order(r):
+        return "R is not prime-order ([L]R != O)"
     return ""
 
 
@@ -232,9 +276,9 @@ def main(argv=None) -> int:
 
 # ---- offline Rekor anchor verification (SPEC section 8); no network ----
 def envelope_digest(env: dict) -> str:
-    """sha256 over JCS(envelope minus `anchors`); unknown top-level keys ARE included."""
+    """sha512 (hex) over JCS(envelope minus `anchors`); unknown top-level keys ARE included."""
     core = {k: v for k, v in env.items() if k != "anchors"}
-    return hashlib.sha256(jcs(core)).hexdigest()
+    return hashlib.sha512(jcs(core)).hexdigest()
 
 
 def _h(b: bytes) -> bytes:
@@ -272,16 +316,15 @@ def _check_one_anchor(env: dict, an: dict, rekor_pem: bytes) -> str:
     digest = envelope_digest(env)
     body = base64.b64decode(an["body"], validate=True)
     spec = json.loads(body)
-    if (
-        spec.get("kind") != "hashedrekord"
-        or spec["spec"]["data"]["hash"]["value"] != digest
-    ):
+    h = spec["spec"]["data"]["hash"]
+    if spec.get("kind") != "hashedrekord" or h["algorithm"] != "sha512" or h["value"] != digest:
         return "anchored digest does not match this envelope"
     pem = base64.b64decode(spec["spec"]["signature"]["publicKey"]["content"])
-    ed = serialization.load_pem_public_key(pem)
-    ed.verify(
-        base64.b64decode(spec["spec"]["signature"]["content"]), bytes.fromhex(digest)
+    pub = serialization.load_pem_public_key(pem).public_bytes(
+        serialization.Encoding.Raw, serialization.PublicFormat.Raw
     )
+    if not ed25519ph_verify(pub, bytes.fromhex(digest), base64.b64decode(spec["spec"]["signature"]["content"])):
+        return "entry signature (Ed25519ph over the sha512 digest) does not verify"
     pr = an["inclusionProof"]
     leaf = _h(b"\x00" + body)
     ok = verify_inclusion(
@@ -335,7 +378,11 @@ def check_anchors(a) -> int:
         print("ANCHOR-FAIL: no pinned Rekor public key (--rekor-key)", file=sys.stderr)
         return 6
     pem = open(kp, "rb").read()
-    print("rekor key sha256:", hashlib.sha256(pem).hexdigest())
+    kh = hashlib.sha256(pem).hexdigest()
+    print("rekor key sha256:", kh)
+    if not a.rekor_key and kh != REKOR_KEY_SHA256:
+        print("ANCHOR-FAIL: default rekor.pub does not match the pinned sha256", file=sys.stderr)
+        return 6
     for i, an in enumerate(anchors):
         try:
             why = _check_one_anchor(env, an, pem)

@@ -343,12 +343,27 @@ def test_canonical_is_ascii_only():
     assert canonical({"a": "é"}) == rb'{"a":"\u00e9"}'
 
 
+# attest-spec SPEC 1.4 verifier; this pin always runs, so a fresh clone checks the shipped copy
+PINNED_VERIFIER_SHA256 = (
+    "51da005156826521b9a55ecf2ad3b5eb2aeb8cf85fb9ba70f231bfce55403687"
+)
+
+
+def test_verifier_copy_matches_pinned_spec_revision():
+    import hashlib
+
+    h = hashlib.sha256(open(LOCAL_VERIFIER, "rb").read()).hexdigest()
+    assert h == PINNED_VERIFIER_SHA256
+
+
 def test_verifier_copy_identical_to_spec_repo():
     import hashlib
 
     if not os.path.exists(ATTEST_SPEC):
         pytest.skip("attest-spec repo not alongside")
     h = lambda p: hashlib.sha256(open(p, "rb").read()).hexdigest()
+    if h(ATTEST_SPEC) != PINNED_VERIFIER_SHA256:
+        pytest.skip("sibling attest-spec is at another revision than the pinned one")
     assert h(LOCAL_VERIFIER) == h(ATTEST_SPEC)
 
 

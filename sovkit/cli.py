@@ -13,6 +13,28 @@ from sovkit.sources.fixture import load_fixture
 app = typer.Typer(add_completion=False, no_args_is_help=True)
 
 
+@app.command("excel-scan")
+def excel_scan(
+    directory: str,
+    out: str = typer.Option(
+        "work/out", help="work dir; adds a signed section to its inventory receipt"
+    ),
+    roundtrip: bool = typer.Option(
+        False, "--roundtrip", help="soffice ods round-trip value diff"
+    ),
+):
+    """Scan local workbooks for macros, Power Query, LAMBDA, links (no network)."""
+    from sovkit.excel import scan_dir, write_scan
+
+    res = scan_dir(directory, roundtrip)
+    write_scan(res, out)
+    typer.echo(f"excel-scan: {res['total']} workbooks {res['risk_counts']} -> {out}")
+    for r in res["files"]:
+        typer.echo(f"{r['risk']:6} {r['path']}  {'; '.join(r['reasons'])}")
+        if roundtrip:
+            typer.echo(f"       {r['roundtrip']}")
+
+
 @app.command()
 def inventory(
     fixture: str = typer.Option(None, help="fixture folder"),
@@ -75,7 +97,10 @@ def plan(out: str):
 @app.command()
 def drill(
     out: str,
-    target: str = typer.Option(..., help="local folder, or nextcloud://host:port (env SOVKIT_NC_USER / SOVKIT_NC_PASS)"),
+    target: str = typer.Option(
+        ...,
+        help="local folder, or nextcloud://host:port (env SOVKIT_NC_USER / SOVKIT_NC_PASS)",
+    ),
     fixture: str = typer.Option(None),
 ):
     """Dry-run migration into a local target tree or a Nextcloud over WebDAV."""
@@ -102,7 +127,8 @@ def drill(
 def verify(
     out: str,
     expect_keyid: str = typer.Option(
-        ..., help="trusted producer keyid (sha256 hex of the public key); see `sovkit keyid`"
+        ...,
+        help="trusted producer keyid (sha256 hex of the public key); see `sovkit keyid`",
     ),
     allow_size_only: bool = typer.Option(
         False, help="accept UNHASHED objects verified by size only"
@@ -123,7 +149,8 @@ def verify(
         raise typer.Exit(1)
     if r["ok"] and r["size_only"]:
         typer.echo(
-            f"PASS-SIZE-ONLY ({len(r['unhashed'])}: {', '.join(r['unhashed'])})", err=True
+            f"PASS-SIZE-ONLY ({len(r['unhashed'])}: {', '.join(r['unhashed'])})",
+            err=True,
         )
         raise typer.Exit(2)
     typer.echo(
