@@ -66,7 +66,7 @@ The last command prints `PASS-SIZE-ONLY (1: remote_large.pdf)` and exits 2 on th
 
 **Who is it for?** System integrators and IT teams moving organisations to openDesk or Nextcloud. See [`docs/FOR_SIS.md`](docs/FOR_SIS.md).
 
-**Where do credentials go?** In the environment only (`SOVKIT_NC_USER`, `SOVKIT_NC_PASS`), never in a file.
+**Where do credentials go?** In the environment (`SOVKIT_NC_USER`, `SOVKIT_NC_PASS`) or a gitignored `drill/.env` copied from `drill/.env.example`; never committed.
 
 **How do I check a receipt?** `python tools/attest_verify.py X.dsse.json --key pubkey.hex --expect-keyid $KID`. The pin is required, and a key beside the artefact is untrusted unless it matches.
 
