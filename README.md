@@ -28,3 +28,7 @@ Every verifier needs a trusted key from OUT OF BAND; a key file beside the artef
 Maintainer keyid: run `sovkit keyid`; publish it in your README and at `https://<your-domain>/.well-known/attestation-keys.json`.
 
 Verify with `sovkit verify OUT --expect-keyid <keyid>`, `python sovkit/verify_receipt.py FILE SIG PUB --expect-keyid <keyid>`, or `python tools/attest_verify.py X.dsse.json --key pubkey.hex --expect-keyid <keyid>`. `sovkit verify` takes expected hashes only from the signed `inventory.json`, fails if `drill.json` disagrees, and exits 2 with `PASS-SIZE-ONLY (n: names)` when UNHASHED objects were checked by size only. A wrong pin fails with "key does not match pin".
+
+## Real Nextcloud drill
+
+`python -m sovkit drill OUT --target nextcloud://localhost:8180` uploads documents to a Nextcloud over WebDAV (credentials from env `SOVKIT_NC_USER` / `SOVKIT_NC_PASS`); `verify` re-inventories it with PROPFIND. Local throwaway server: `drill/docker-compose.yml`. Measured run and exact commands: `docs/DRILL_NEXTCLOUD.md`.

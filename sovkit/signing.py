@@ -18,7 +18,7 @@ def key_path() -> str:
 def load_key() -> Ed25519PrivateKey:
     p = key_path()
     if os.path.exists(p):
-        return serialization.load_pem_private_key(open(p, "rb").read(), password=None)
+        return serialization.load_pem_private_key(open(p, "rb").read(), None)
     os.makedirs(os.path.dirname(p), exist_ok=True)
     k = Ed25519PrivateKey.generate()
     with open(p, "wb") as f:

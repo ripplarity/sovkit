@@ -73,8 +73,12 @@ def plan(out: str):
 
 
 @app.command()
-def drill(out: str, target: str = typer.Option(...), fixture: str = typer.Option(None)):
-    """Dry-run migration into a local target tree."""
+def drill(
+    out: str,
+    target: str = typer.Option(..., help="local folder, or nextcloud://host:port (env SOVKIT_NC_USER / SOVKIT_NC_PASS)"),
+    fixture: str = typer.Option(None),
+):
+    """Dry-run migration into a local target tree or a Nextcloud over WebDAV."""
     fx = fixture
     if not fx:
         pp = os.path.join(out, "fixture.path")
@@ -82,7 +86,13 @@ def drill(out: str, target: str = typer.Option(...), fixture: str = typer.Option
             typer.echo("error: drill needs a fixture estate (--fixture)", err=True)
             raise typer.Exit(2)
         fx = open(pp).read().strip()
-    m = run_drill(out, target, fx)
+    from sovkit.webdav import DavError
+
+    try:
+        m = run_drill(out, target, fx)
+    except DavError as e:
+        typer.echo(f"error: {e}", err=True)
+        raise typer.Exit(2)
     typer.echo(
         f"drill: {len(m['entries'])} objects copied in {m['copy_seconds']}s, {len(m['skipped_unmapped'])} unmapped skipped"
     )
@@ -100,7 +110,13 @@ def verify(
 ):
     """Re-inventory the drill target; write diff.json and signed drill.receipt.md.
     Exit 0 only if diff empty and every object is hash-verified; 2 = PASS-SIZE-ONLY."""
-    r = verify_drill(out, expect_keyid, allow_size_only)
+    from sovkit.webdav import DavError
+
+    try:
+        r = verify_drill(out, expect_keyid, allow_size_only)
+    except DavError as e:
+        typer.echo(f"error: {e}", err=True)
+        raise typer.Exit(2)
     d = r["diff"]
     if r["sig_error"]:
         typer.echo(f"verify: FAIL {r['sig_error']}", err=True)

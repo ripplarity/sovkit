@@ -1,0 +1,18 @@
+# Throwaway Nextcloud for the sovkit drill. Credentials come from the environment (see .env.example); never commit them.
+services:
+  nextcloud:
+    image: nextcloud:stable
+    container_name: sovkit-nextcloud
+    ports:
+      - "8180:80"
+    environment:
+      SQLITE_DATABASE: nextcloud
+      NEXTCLOUD_ADMIN_USER: ${SOVKIT_NC_USER:?set SOVKIT_NC_USER in the env}
+      NEXTCLOUD_ADMIN_PASSWORD: ${SOVKIT_NC_PASS:?set SOVKIT_NC_PASS in the env}
+      NEXTCLOUD_TRUSTED_DOMAINS: localhost
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost/status.php | grep -q '\"installed\":true'"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+      start_period: 20s

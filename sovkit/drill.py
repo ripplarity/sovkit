@@ -44,7 +44,30 @@ def target_rel(o) -> str:
     return f"{LAYOUT[o.kind]}/{sanitize(o.id, 40)}_{stem}{ext}"
 
 
-def run_drill(out: str, target: str, fixture: str) -> dict:
+NC_PREFIX = "nextcloud://"
+NC_ROOT = "sovkit-drill"
+
+
+def is_nc(target: str) -> bool:
+    return target.startswith(NC_PREFIX)
+
+
+def remote_path(o) -> str:
+    """Nextcloud path for a document: one folder per SharePoint library / OneDrive owner."""
+    return f"{NC_ROOT}/{sanitize(o.owner or 'unowned', 80)}/{target_rel(o).rsplit('/', 1)[1]}"
+
+
+def run_drill(out: str, target: str, fixture: str, dav=None) -> dict:
+    """Copy mapped objects into a local tree, or (target nextcloud://host:port) documents into
+    Nextcloud over WebDAV and everything else into <out>/target_local."""
+    nc = is_nc(target)
+    if nc:
+        from sovkit.webdav import WebDAV
+
+        dav = dav or WebDAV.from_env(target)
+        local_root = os.path.join(out, "target_local")
+    else:
+        local_root = target
     estate = load_inventory(out)
     _, files = load_fixture(fixture)
     t0 = time.time()
@@ -60,10 +83,13 @@ def run_drill(out: str, target: str, fixture: str) -> dict:
         else:
             data = canonical(o.model_dump())
         rel = target_rel(o)
-        p = os.path.join(target, *rel.split("/"))
-        os.makedirs(os.path.dirname(p), exist_ok=True)
-        with open(p, "wb") as f:
-            f.write(data)
+        if nc and o.kind == "document":
+            dav.put(remote_path(o), data)
+        else:
+            p = os.path.join(local_root, *rel.split("/"))
+            os.makedirs(os.path.dirname(p), exist_ok=True)
+            with open(p, "wb") as f:
+                f.write(data)
         mode = "size" if "UNHASHED" in o.flags and o.id not in files else "hash"
         entries.append(
             {
@@ -78,7 +104,7 @@ def run_drill(out: str, target: str, fixture: str) -> dict:
     t1 = time.time()
     manifest = {
         "fixture": fixture,
-        "target": os.path.abspath(target),
+        "target": target if nc else os.path.abspath(target),
         "started": t0,
         "ended": t1,
         "copy_seconds": round(t1 - t0, 3),
@@ -101,7 +127,7 @@ def expected_entry(o):
 
 
 def verify_drill(
-    out: str, expect_keyid: str = None, allow_size_only: bool = False
+    out: str, expect_keyid: str = None, allow_size_only: bool = False, dav=None
 ) -> dict:
     """Verify a drill. expect_keyid (sha256 hex of the producer public key) is REQUIRED:
     the inventory signature is checked against that pin, and expected hashes come only from
@@ -141,21 +167,43 @@ def verify_drill(
         elif e["mode"] != x[0] or e["size"] != x[2] or (x[0] == "hash" and e["sha256"] != x[1]):
             disagree.append(rel)
     target = m["target"]
+    nc = is_nc(target)
     expected = {rel: {"mode": x[0], "sha256": x[1], "size": x[2]} for rel, x in exp.items()}
-    actual = set()
-    for root, _, fs in os.walk(target):
+    actual, remote_of, remote_size = set(), {}, {}
+    local_root = os.path.join(out, "target_local") if nc else target
+    for root, _, fs in os.walk(local_root):
         for fn in fs:
             actual.add(
-                os.path.relpath(os.path.join(root, fn), target).replace(os.sep, "/")
+                os.path.relpath(os.path.join(root, fn), local_root).replace(os.sep, "/")
             )
+    extra_remote = []
+    if nc:
+        from sovkit.webdav import WebDAV
+
+        dav = dav or WebDAV.from_env(target)
+        want = {remote_path(o): target_rel(o) for o in estate.objects if o.kind == "document" and map_object(o)["mapped"]}
+        for rp, size in dav.list_files(NC_ROOT).items():
+            if rp in want:
+                actual.add(want[rp])
+                remote_of[want[rp]] = rp
+                remote_size[want[rp]] = size
+            else:
+                extra_remote.append("nextcloud:" + rp)
     missing = sorted(set(expected) - actual)
-    extra = sorted(actual - set(expected))
+    extra = sorted((actual - set(expected))) + sorted(extra_remote)
     mismatch, by_size = [], 0
     for rel, e in expected.items():
         if rel in missing:
             continue
-        p = os.path.join(target, *rel.split("/"))
-        if e["mode"] == "size":
+        p = os.path.join(local_root, *rel.split("/"))
+        if rel in remote_of:
+            if e["mode"] == "size":
+                by_size += 1
+                if remote_size[rel] != e["size"]:
+                    mismatch.append(rel)
+            elif sha256_bytes(dav.get(remote_of[rel])) != e["sha256"]:
+                mismatch.append(rel)  # each remote file is downloaded exactly once
+        elif e["mode"] == "size":
             by_size += 1
             if os.path.getsize(p) != e["size"]:
                 mismatch.append(rel)
